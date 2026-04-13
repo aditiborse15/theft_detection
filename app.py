@@ -16,8 +16,6 @@ import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, db
 import pandas as pd
-import plotly.graph_objects as go
-import plotly.express as px
 from datetime import datetime, timezone
 import time
 import json
@@ -279,13 +277,13 @@ def init_firebase():
         key_path = "serviceAccountKey.json"
         if os.path.exists(key_path):
             cred = credentials.Certificate(key_path)
-            firebase_admin.initialize_app(cred, {"databaseURL": FIREBASE_DB_URL})
+            firebase_admin.initialize_app(cred, {"databaseURL": 'https://electricitytheft-70724-default-rtdb.firebaseio.com/'})
             return True
         else:
             # Try Application Default Credentials (GCP / env var)
             try:
                 cred = credentials.ApplicationDefault()
-                firebase_admin.initialize_app(cred, {"databaseURL": FIREBASE_DB_URL})
+                firebase_admin.initialize_app(cred, {"databaseURL": 'https://electricitytheft-70724-default-rtdb.firebaseio.com/'})
                 return True
             except Exception:
                 return False   # No credentials found – use mock data
@@ -390,37 +388,6 @@ def ai_analyse(latest: dict, config: dict) -> dict:
 
     return {"anomaly": len(reasons) > 0, "reasons": reasons}
 
-
-# ─────────────────────────────────────────────
-#  CHART HELPERS (Plotly dark theme)
-# ─────────────────────────────────────────────
-PLOTLY_LAYOUT = dict(
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor ="#0f1526",
-    font         =dict(family="Exo 2, sans-serif", color="#6b7a99", size=11),
-    xaxis        =dict(gridcolor="#1e2a42", linecolor="#1e2a42", tickfont=dict(size=10)),
-    yaxis        =dict(gridcolor="#1e2a42", linecolor="#1e2a42", tickfont=dict(size=10)),
-    margin       =dict(l=45, r=20, t=30, b=35),
-    hovermode    ="x unified",
-    hoverlabel   =dict(bgcolor="#141c2e", bordercolor="#1e2a42",
-                       font=dict(family="Share Tech Mono", size=12, color="#e8f0fe")),
-)
-
-def make_line_chart(df: pd.DataFrame, col: str, color: str, unit: str, title: str):
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=df.index, y=df[col],
-        mode="lines+markers",
-        line=dict(color=color, width=2.5),
-        marker=dict(size=5, color=color),
-        fill="tozeroy",
-        fillcolor=color.replace(")", ",0.07)").replace("rgb", "rgba") if "rgb" in color
-                  else color + "15",
-        name=col,
-        hovertemplate=f"<b>{col}</b>: %{{y:.2f}} {unit}<extra></extra>",
-    ))
-    fig.update_layout(**PLOTLY_LAYOUT, title=dict(text=title, font=dict(size=13, color="#a0aec0"), x=0.01))
-    return fig
 
 
 # ─────────────────────────────────────────────
@@ -703,71 +670,7 @@ with rc2:
                 st.warning("⚠️ Command sent: Relay OFF")
 
 
-# ══════════════════════════════════════════════
-#  SECTION 5 — GRAPHS
-# ══════════════════════════════════════════════
-st.markdown("<div class='section-header'>📈 Sensor Graphs</div>", unsafe_allow_html=True)
-
-# Build dataframe from history + latest point
-history_rows = []
-for k, v in history.items():
-    if isinstance(v, dict):
-        history_rows.append({
-            "label":   k,
-            "voltage": float(v.get("voltage", 0)),
-            "current": float(v.get("current", 0)),
-            "power":   float(v.get("power",   0)),
-            "status":  v.get("status", "NORMAL"),
-        })
-
-# Append live reading as the last point
-history_rows.append({
-    "label":   "LIVE",
-    "voltage": voltage,
-    "current": current,
-    "power":   power,
-    "status":  status,
-})
-
-df = pd.DataFrame(history_rows)
-
-if not df.empty:
-    g1, g2 = st.columns(2)
-
-    with g1:
-        fig_v = make_line_chart(df, "voltage", "#00d4ff", "V", "Voltage (V)")
-        st.plotly_chart(fig_v, use_container_width=True, config={"displayModeBar": False})
-
-    with g2:
-        fig_c = make_line_chart(df, "current", "#a855f7", "A", "Current (A)")
-        st.plotly_chart(fig_c, use_container_width=True, config={"displayModeBar": False})
-
-    # Power full-width
-    fig_p = make_line_chart(df, "power", "#ffb300", "W", "Power (W)")
-    st.plotly_chart(fig_p, use_container_width=True, config={"displayModeBar": False})
-
-    # Theft scatter overlay
-    theft_df = df[df["status"] == "THEFT"]
-    if not theft_df.empty:
-        fig_scatter = go.Figure()
-        fig_scatter.add_trace(go.Scatter(
-            x=df.index, y=df["power"],
-            mode="lines", line=dict(color="#ffb300", width=1.5), name="Power",
-        ))
-        fig_scatter.add_trace(go.Scatter(
-            x=theft_df.index, y=theft_df["power"],
-            mode="markers", marker=dict(color="#ff2d55", size=12, symbol="x-open",
-                                         line=dict(width=2, color="#ff2d55")),
-            name="🚨 Theft Point",
-        ))
-        fig_scatter.update_layout(**PLOTLY_LAYOUT,
-                                  title=dict(text="Power (W) — Theft Events Highlighted",
-                                             font=dict(size=13, color="#a0aec0"), x=0.01))
-        st.plotly_chart(fig_scatter, use_container_width=True, config={"displayModeBar": False})
-else:
-    st.info("No historical data available yet.")
-
-
+#
 # ══════════════════════════════════════════════
 #  SECTION 6 — HISTORY LOG
 # ══════════════════════════════════════════════
@@ -803,60 +706,6 @@ if history:
 else:
     st.info("No history records found.")
 
-
-# ══════════════════════════════════════════════
-#  SECTION 7 — AI ANALYSIS REPORT
-# ══════════════════════════════════════════════
-st.markdown("<div class='section-header'>🤖 AI Anomaly Report</div>", unsafe_allow_html=True)
-
-ai1, ai2 = st.columns([2, 1])
-with ai1:
-    if ai_result["anomaly"]:
-        for r in ai_result["reasons"]:
-            st.markdown(f"""
-            <div style='background:rgba(255,45,85,0.07); border-left:3px solid #ff2d55;
-                        padding:10px 16px; border-radius:6px; margin:6px 0;
-                        font-family:Share Tech Mono; font-size:0.82rem; color:#ffb3c1;'>
-                ⚠ {r}
-            </div>
-            """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <div style='background:rgba(0,255,136,0.07); border-left:3px solid #00ff88;
-                    padding:10px 16px; border-radius:6px;
-                    font-family:Share Tech Mono; font-size:0.82rem; color:#b3ffe0;'>
-            ✅ All readings within expected parameters. No anomalies detected.
-        </div>
-        """, unsafe_allow_html=True)
-
-with ai2:
-    # Gauge chart for current utilisation
-    gauge_val = min((current / float(config.get("currentMax", 15))) * 100, 100) if config else 0
-    fig_gauge = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=gauge_val,
-        title={"text": "Current Load %", "font": {"size": 13, "color": "#6b7a99", "family": "Exo 2"}},
-        number={"suffix": "%", "font": {"color": "#00d4ff", "size": 28, "family": "Rajdhani"}},
-        gauge={
-            "axis": {"range": [0, 100], "tickcolor": "#6b7a99"},
-            "bar":  {"color": "#00d4ff"},
-            "bgcolor": "#141c2e",
-            "bordercolor": "#1e2a42",
-            "steps": [
-                {"range": [0,   60], "color": "rgba(0,255,136,0.12)"},
-                {"range": [60,  85], "color": "rgba(255,179,0,0.12)"},
-                {"range": [85, 100], "color": "rgba(255,45,85,0.12)"},
-            ],
-            "threshold": {"line": {"color": "#ff2d55", "width": 2}, "value": 85},
-        },
-    ))
-    fig_gauge.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor ="rgba(0,0,0,0)",
-        margin=dict(l=20, r=20, t=40, b=20),
-        height=200,
-    )
-    st.plotly_chart(fig_gauge, use_container_width=True, config={"displayModeBar": False})
 
 
 # ══════════════════════════════════════════════
