@@ -16,6 +16,7 @@ import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, db
 import pandas as pd
+
 from datetime import datetime, timezone
 import time
 import json
@@ -276,7 +277,7 @@ def init_firebase():
     if not firebase_admin._apps:
         key_path = "serviceAccountKey.json"
         if os.path.exists(key_path):
-            cred = credentials.Certificate(key_path)
+            cred = credentials.Certificate("serviceAccountKey.json")
             firebase_admin.initialize_app(cred, {"databaseURL": 'https://electricitytheft-70724-default-rtdb.firebaseio.com/'})
             return True
         else:
